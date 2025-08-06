@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -105,7 +106,7 @@ export default function Home() {
           audioData = media;
         } else {
           // Fallback to Web Speech API
-          console.error('Google TTS failed, falling back to Web Speech API.');
+          console.log('Google TTS failed, falling back to Web Speech API.');
           speak(answer, language);
           const errorData = await ttsRes.json();
           const errorMessage = errorData.error || 'Unknown TTS error';
@@ -211,11 +212,6 @@ export default function Home() {
     }
   };
 
-  const handlePromptClick = (prompt: string) => {
-    if (isLoading || isListening) return;
-    processTranscript(prompt);
-  };
-
   if (!isMounted) {
     return null; // Or a loading spinner
   }
@@ -236,7 +232,7 @@ export default function Home() {
       </header>
 
       <main className="flex-1 overflow-hidden">
-        <ChatHistory history={chatHistory} onPromptClick={handlePromptClick} />
+        <ChatHistory history={chatHistory} />
       </main>
 
       <footer className="relative flex flex-col items-center justify-center gap-2 p-4">

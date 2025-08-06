@@ -1,18 +1,17 @@
+
 'use client';
 
 import { useEffect, useRef } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatMessage } from './ChatMessage';
 import type { ChatMessage as ChatMessageType } from '@/lib/types';
-import { Card, CardContent } from '@/components/ui/card';
 import { Sparkles } from 'lucide-react';
 
 interface ChatHistoryProps {
   history: ChatMessageType[];
-  onPromptClick: (prompt: string) => void;
 }
 
-export function ChatHistory({ history, onPromptClick }: ChatHistoryProps) {
+export function ChatHistory({ history }: ChatHistoryProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
