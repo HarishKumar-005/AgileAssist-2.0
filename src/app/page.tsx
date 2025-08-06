@@ -16,7 +16,9 @@ const initialWelcomeMessage: ChatMessageType = {
   id: 'initial-welcome',
   role: 'assistant',
   text: 'Welcome to AgileAssist! How can I help you today?',
-  audio: undefined,
+  audio: undefined, // No Google TTS audio for welcome message
+  language: 'en-US',
+  isWelcome: true, // Add a flag to identify the welcome message
 };
 
 
@@ -34,6 +36,9 @@ export default function Home() {
 
   useEffect(() => {
     setIsMounted(true);
+    // Play the welcome message using browser TTS on initial load
+    speak(initialWelcomeMessage.text, initialWelcomeMessage.language || 'en-US');
+
     // Cleanup speech on unmount
     return () => {
       cancel();

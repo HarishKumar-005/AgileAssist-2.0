@@ -14,13 +14,16 @@ interface ChatMessageProps {
 export function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === 'user';
 
+  // For the welcome message, we want to provide playback controls but not autoplay,
+  // as autoplay is handled on the main page.
+  const shouldAutoplay = !message.isWelcome;
+
   // Determine which player to use
   const Player = message.audio ? AudioPlayer : WebSpeechPlayer;
   const playerProps = message.audio
-    ? { src: message.audio, autoplay: true }
-    // If there's no audio data, it means we should use the browser's voice as a fallback
-    // The `language` prop ensures the browser uses the correct voice (e.g., Tamil).
-    : { text: message.text, lang: message.language || 'en-US', autoplay: true };
+    ? { src: message.audio, autoplay: shouldAutoplay }
+    // If there's no audio data, it means we should use the browser's voice.
+    : { text: message.text, lang: message.language || 'en-US', autoplay: shouldAutoplay };
 
 
   return (
