@@ -21,6 +21,7 @@ const initialWelcomeMessage: ChatMessageType = {
   isWelcome: true, 
 };
 
+const SPEECH_RECOGNITION_SILENCE_TIMEOUT = 2000; // 2 seconds
 
 export default function Home() {
   const { toast } = useToast();
@@ -32,6 +33,8 @@ export default function Home() {
   const [interimTranscript, setInterimTranscript] = useState('');
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const finalTranscriptRef = useRef<string>('');
   const { isSupported: isWebSpeechSupported, speak, cancel, areVoicesReady } = useWebSpeech();
 
   useEffect(() => {
@@ -158,6 +161,15 @@ export default function Home() {
     }
   }, [isConfigured, chatHistory, speak, toast]);
 
+  const stopListeningAndProcess = useCallback(() => {
+    recognitionRef.current?.stop();
+    if (finalTranscriptRef.current) {
+      setIsLoading(true);
+      processTranscript(finalTranscriptRef.current);
+      finalTranscriptRef.current = ''; // Clear the transcript after processing
+    }
+  }, [processTranscript]);
+
   useEffect(() => {
     if (!isMounted || !isWebSpeechSupported) return;
 
@@ -184,15 +196,14 @@ export default function Home() {
     recognition.onstart = () => {
       setIsListening(true);
       setInterimTranscript('');
+      finalTranscriptRef.current = '';
     };
 
     recognition.onend = () => {
       setIsListening(false);
       setInterimTranscript('');
-      // If isLoading is true, it means we are processing a transcript, so no need to do anything.
-      // If it's false, it means recognition ended without a final result (e.g., timeout, manual stop).
-      if (!isLoading) {
-        // You might want to handle this case, e.g., show a message 'did not catch that'
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
       }
     };
     recognition.onerror = (event) => {
@@ -207,28 +218,31 @@ export default function Home() {
     };
 
     recognition.onresult = (event) => {
-      let finalTranscript = '';
+      // Always clear the timer on a new result
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
+      
       let interim = '';
-
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript.trim();
+          finalTranscriptRef.current += event.results[i][0].transcript.trim() + ' ';
         } else {
           interim += event.results[i][0].transcript;
         }
       }
       
-      setInterimTranscript(interim);
+      setInterimTranscript(interim || finalTranscriptRef.current);
 
-      if (finalTranscript) {
-        recognitionRef.current?.stop(); // Stop listening as soon as we have a final result
-        setIsLoading(true);
-        processTranscript(finalTranscript);
-      }
+      // Start a new timer to stop listening after a pause
+      silenceTimerRef.current = setTimeout(
+        stopListeningAndProcess,
+        SPEECH_RECOGNITION_SILENCE_TIMEOUT
+      );
     };
 
     recognitionRef.current = recognition;
-  }, [isMounted, isWebSpeechSupported, toast, processTranscript, isLoading]);
+  }, [isMounted, isWebSpeechSupported, toast, processTranscript, stopListeningAndProcess]);
 
   const handleMicClick = () => {
     if (isLoading) return;
@@ -237,7 +251,7 @@ export default function Home() {
     if (!recognition) return;
 
     if (isListening) {
-      recognition.stop();
+      stopListeningAndProcess();
     } else {
       cancel(); // Stop any currently playing audio
       try {
