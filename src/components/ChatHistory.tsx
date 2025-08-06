@@ -12,12 +12,6 @@ interface ChatHistoryProps {
   onPromptClick: (prompt: string) => void;
 }
 
-const suggestedPrompts = [
-  'Explain photosynthesis in simple terms.',
-  'What are the main themes in "To Kill a Mockingbird"?',
-  'Give me a fun fact about the Roman Empire.',
-];
-
 export function ChatHistory({ history, onPromptClick }: ChatHistoryProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -42,24 +36,8 @@ export function ChatHistory({ history, onPromptClick }: ChatHistoryProps) {
               Welcome to AgileAssist
             </h2>
             <p className="mt-2 text-muted-foreground">
-              Your AI-powered assistant for the classroom.
+             Press the microphone to get started.
             </p>
-            <p className="mt-1 text-muted-foreground">
-              Press the microphone or try one of these prompts to get started:
-            </p>
-            <div className="mt-6 grid gap-4 sm:grid-cols-1 md:grid-cols-3">
-                {suggestedPrompts.map((prompt) => (
-                    <Card
-                      key={prompt}
-                      className="cursor-pointer transition-transform hover:scale-105 hover:bg-muted/50"
-                      onClick={() => onPromptClick(prompt)}
-                    >
-                        <CardContent className="p-4">
-                            <p className="text-sm font-medium">{prompt}</p>
-                        </CardContent>
-                    </Card>
-                ))}
-            </div>
           </div>
         )}
       </div>

@@ -9,12 +9,19 @@ import { LanguageSelector } from '@/components/LanguageSelector';
 import { MicButton } from '@/components/MicButton';
 import { ChatHistory } from '@/components/ChatHistory';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+
+const initialWelcomeMessage: ChatMessageType = {
+  id: 'initial-welcome',
+  role: 'assistant',
+  text: 'Welcome to AgileAssist! How can I help you today?',
+  audio: '', // This will be populated on the client
+};
+
 
 export default function Home() {
   const { toast } = useToast();
-  const [chatHistory, setChatHistory] = useState<ChatMessageType[]>([]);
+  const [chatHistory, setChatHistory] = useState<ChatMessageType[]>([initialWelcomeMessage]);
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [language, setLanguage] = useState('en-US');
@@ -39,6 +46,25 @@ export default function Home() {
             description: 'Please configure the GEMINI_API_KEY environment variable.',
             variant: 'destructive',
           });
+        } else {
+           // Generate TTS for the initial message once the component is mounted and configured.
+           if (chatHistory.length === 1 && chatHistory[0].id === 'initial-welcome' && !chatHistory[0].audio) {
+            fetch('/api/gen-ai', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'textToSpeech',
+                payload: { text: initialWelcomeMessage.text, languageCode: 'en-US' },
+              }),
+            })
+            .then(res => res.json())
+            .then(({ media }) => {
+              setChatHistory(prev => [{ ...prev[0], audio: media }]);
+            })
+            .catch(error => {
+              console.error("Failed to generate welcome audio:", error);
+            });
+          }
         }
       });
   }, [toast]);
@@ -47,12 +73,16 @@ export default function Home() {
     if (!transcript.trim() || !isConfigured) return;
 
     setIsLoading(true);
+
+    // Clear initial message if it's the only one
+    const newChatHistory = chatHistory[0]?.id === 'initial-welcome' ? [] : chatHistory;
+
     const userMessage: ChatMessageType = {
       id: Date.now().toString(),
       role: 'user',
       text: transcript,
     };
-    setChatHistory(prev => [...prev, userMessage]);
+    setChatHistory([...newChatHistory, userMessage]);
 
     try {
       const assistanceRes = await fetch('/api/gen-ai', {
@@ -97,7 +127,7 @@ export default function Home() {
     } finally {
       setIsLoading(false);
     }
-  }, [language, toast, isConfigured]);
+  }, [language, toast, isConfigured, chatHistory]);
 
   useEffect(() => {
     if (!isMounted) return;
