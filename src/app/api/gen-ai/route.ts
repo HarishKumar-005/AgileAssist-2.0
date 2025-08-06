@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { multilingualAssistance } from '@/ai/flows/multilingual-support';
 import { textToSpeech } from '@/ai/flows/text-to-speech';
-import { answerQuestion } from '@/ai/flows/answer-question';
 
 export async function POST(req: Request) {
   if (!process.env.GEMINI_API_KEY) {
@@ -15,10 +14,6 @@ export async function POST(req: Request) {
     const { action, payload } = await req.json();
 
     switch (action) {
-      case 'answerQuestion': {
-        const result = await answerQuestion(payload);
-        return NextResponse.json(result);
-      }
       case 'multilingualAssistance': {
         const result = await multilingualAssistance(payload);
         return NextResponse.json(result);
