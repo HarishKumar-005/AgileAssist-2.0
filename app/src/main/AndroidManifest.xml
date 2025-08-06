@@ -187,8 +187,5 @@
         
 
         
-            <activity android:name=
-        "com.google.androidbrowserhelper.locationdelegation.PermissionRequestActivity"/>
-        
     </application>
 </manifest>
