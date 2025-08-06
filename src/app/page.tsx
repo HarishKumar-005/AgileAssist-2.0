@@ -161,6 +161,11 @@ export default function Home() {
     }
   };
 
+  const handlePromptClick = (prompt: string) => {
+    if (isLoading || isListening) return;
+    processTranscript(prompt);
+  };
+
   if (!isMounted) {
     return null; // Or a loading spinner
   }
@@ -181,7 +186,7 @@ export default function Home() {
       </header>
 
       <main className="flex-1 overflow-hidden">
-        <ChatHistory history={chatHistory} />
+        <ChatHistory history={chatHistory} onPromptClick={handlePromptClick} />
       </main>
 
       <footer className="relative flex flex-col items-center justify-center gap-2 p-4">
