@@ -16,9 +16,9 @@ const initialWelcomeMessage: ChatMessageType = {
   id: 'initial-welcome',
   role: 'assistant',
   text: 'Welcome to AgileAssist! How can I help you today?',
-  audio: undefined, // No Google TTS audio for welcome message
+  audio: undefined,
   language: 'en-US',
-  isWelcome: true, // Add a flag to identify the welcome message
+  isWelcome: true, 
 };
 
 
@@ -32,18 +32,22 @@ export default function Home() {
   const [interimTranscript, setInterimTranscript] = useState('');
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const { speak, cancel } = useWebSpeech();
+  const { isSupported: isWebSpeechSupported, speak, cancel } = useWebSpeech();
 
   useEffect(() => {
     setIsMounted(true);
-    // Play the welcome message using browser TTS on initial load
-    speak(initialWelcomeMessage.text, initialWelcomeMessage.language || 'en-US');
+  }, []);
 
+  // Play welcome message only when Web Speech API is ready
+  useEffect(() => {
+    if (isWebSpeechSupported) {
+      speak(initialWelcomeMessage.text, initialWelcomeMessage.language || 'en-US');
+    }
     // Cleanup speech on unmount
     return () => {
       cancel();
     }
-  }, []);
+  }, [isWebSpeechSupported, speak, cancel]);
 
   useEffect(() => {
     fetch('/api/health')
@@ -76,7 +80,7 @@ export default function Home() {
 
     let assistantText = '';
     let audioData: string | undefined = undefined;
-    let responseLanguage = 'en-US'; // Default language
+    let responseLanguage = 'en-US'; 
 
     try {
       const assistanceRes = await fetch('/api/gen-ai', {
@@ -137,7 +141,6 @@ export default function Home() {
         description: errorMessage,
         variant: 'destructive',
       });
-      // Use a generic error message if the AI fails completely
       assistantText = "I'm sorry, but I encountered an error and can't respond right now.";
     } finally {
       if (assistantText) {
@@ -170,7 +173,7 @@ export default function Home() {
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = 'en-US'; // We can keep this simple, as the AI will handle language switching.
+    recognition.lang = 'en-US'; 
 
     recognition.onstart = () => setIsListening(true);
     recognition.onend = () => {
@@ -212,14 +215,13 @@ export default function Home() {
     if (isListening) {
       recognitionRef.current?.stop();
     } else {
-      // Cancel any browser speech synthesis when starting a new recognition
       cancel();
       recognitionRef.current?.start();
     }
   };
 
   if (!isMounted) {
-    return null; // Or a loading spinner
+    return null; 
   }
 
   return (
