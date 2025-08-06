@@ -10,6 +10,7 @@ import { MicButton } from '@/components/MicButton';
 import { ChatHistory } from '@/components/ChatHistory';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 
 export default function Home() {
   const { toast } = useToast();
@@ -19,6 +20,7 @@ export default function Home() {
   const [language, setLanguage] = useState('en-US');
   const [isMounted, setIsMounted] = useState(false);
   const [isConfigured, setIsConfigured] = useState(true);
+  const [interimTranscript, setInterimTranscript] = useState('');
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
@@ -111,12 +113,15 @@ export default function Home() {
     }
 
     const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.continuous = true;
+    recognition.interimResults = true;
     recognition.lang = language;
 
     recognition.onstart = () => setIsListening(true);
-    recognition.onend = () => setIsListening(false);
+    recognition.onend = () => {
+      setIsListening(false);
+      setInterimTranscript('');
+    };
     recognition.onerror = (event) => {
       toast({
         title: 'Speech Recognition Error',
@@ -125,8 +130,22 @@ export default function Home() {
       });
     };
     recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      processTranscript(transcript);
+      let finalTranscript = '';
+      let interim = '';
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interim += event.results[i][0].transcript;
+        }
+      }
+
+      setInterimTranscript(interim);
+
+      if (finalTranscript) {
+        processTranscript(finalTranscript);
+      }
     };
 
     recognitionRef.current = recognition;
@@ -165,7 +184,18 @@ export default function Home() {
         <ChatHistory history={chatHistory} />
       </main>
 
-      <footer className="relative flex items-center justify-center p-4">
+      <footer className="relative flex flex-col items-center justify-center gap-2 p-4">
+        {isListening && (
+          <div className="w-full max-w-md lg:max-w-xl">
+            <Card className="bg-muted">
+              <CardContent className="p-4">
+                <p className="text-muted-foreground">
+                  {interimTranscript || 'Listening...'}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
         <MicButton
           isListening={isListening}
           isLoading={isLoading}
