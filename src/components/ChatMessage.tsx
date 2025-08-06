@@ -37,7 +37,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
           <p className="whitespace-pre-wrap">{message.text}</p>
           {!isUser && message.audio && (
             <div className="mt-2 -ml-2">
-              <AudioPlayer src={message.audio} />
+              <AudioPlayer src={message.audio} autoplay />
             </div>
           )}
         </CardContent>

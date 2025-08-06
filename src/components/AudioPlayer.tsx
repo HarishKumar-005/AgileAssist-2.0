@@ -6,22 +6,38 @@ import { Button } from '@/components/ui/button';
 
 interface AudioPlayerProps {
   src: string;
+  autoplay?: boolean;
 }
 
-export function AudioPlayer({ src }: AudioPlayerProps) {
+export function AudioPlayer({ src, autoplay = false }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(autoplay);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
+    const onCanPlay = () => {
+      if (autoplay) {
+        audio.play().catch(() => setIsPlaying(false));
+      }
+    };
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
     const onEnded = () => setIsPlaying(false);
+
+    audio.addEventListener('canplay', onCanPlay);
+    audio.addEventListener('play', onPlay);
+    audio.addEventListener('pause', onPause);
     audio.addEventListener('ended', onEnded);
+
     return () => {
+      audio.removeEventListener('canplay', onCanPlay);
+      audio.removeEventListener('play', onPlay);
+      audio.removeEventListener('pause', onPause);
       audio.removeEventListener('ended', onEnded);
     };
-  }, []);
+  }, [autoplay]);
 
   const togglePlay = () => {
     const audio = audioRef.current;
@@ -32,7 +48,6 @@ export function AudioPlayer({ src }: AudioPlayerProps) {
     } else {
       audio.play();
     }
-    setIsPlaying(!isPlaying);
   };
 
   return (
