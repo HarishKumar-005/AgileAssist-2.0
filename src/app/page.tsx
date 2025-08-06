@@ -1,3 +1,178 @@
+'use client';
+
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { BrainCircuit, LoaderCircle, Mic, MicOff, Sparkles, User } from 'lucide-react';
+
+import type { ChatMessage as ChatMessageType } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
+import { LanguageSelector } from '@/components/LanguageSelector';
+import { MicButton } from '@/components/MicButton';
+import { ChatHistory } from '@/components/ChatHistory';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { Button } from '@/components/ui/button';
+
 export default function Home() {
-  return <></>;
+  const { toast } = useToast();
+  const [chatHistory, setChatHistory] = useState<ChatMessageType[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [language, setLanguage] = useState('en-US');
+  const [isMounted, setIsMounted] = useState(false);
+  const [isConfigured, setIsConfigured] = useState(true);
+
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    fetch('/api/health')
+      .then(res => res.json())
+      .then(data => {
+        if (data.status !== 'ok') {
+          setIsConfigured(false);
+          toast({
+            title: 'Error: Backend not configured',
+            description: 'Please configure the GEMINI_API_KEY environment variable.',
+            variant: 'destructive',
+          });
+        }
+      });
+  }, [toast]);
+
+  const processTranscript = useCallback(async (transcript: string) => {
+    if (!transcript.trim() || !isConfigured) return;
+
+    setIsLoading(true);
+    const userMessage: ChatMessageType = {
+      id: Date.now().toString(),
+      role: 'user',
+      text: transcript,
+    };
+    setChatHistory(prev => [...prev, userMessage]);
+
+    try {
+      const assistanceRes = await fetch('/api/gen-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'multilingualAssistance',
+          payload: { question: transcript, languageCode: language },
+        }),
+      });
+
+      if (!assistanceRes.ok) throw new Error('Failed to get answer from AI.');
+      const { answer } = await assistanceRes.json();
+
+      const ttsRes = await fetch('/api/gen-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'textToSpeech',
+          payload: { text: answer, languageCode: language },
+        }),
+      });
+
+      if (!ttsRes.ok) throw new Error('Failed to generate audio.');
+      const { media } = await ttsRes.json();
+
+      const assistantMessage: ChatMessageType = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        text: answer,
+        audio: media,
+      };
+      setChatHistory(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error(error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
+      toast({
+        title: 'An Error Occurred',
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [language, toast, isConfigured]);
+
+  useEffect(() => {
+    if (!isMounted) return;
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast({
+        title: 'Browser Not Supported',
+        description: 'Speech recognition is not supported in your browser.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = language;
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = (event) => {
+      toast({
+        title: 'Speech Recognition Error',
+        description: event.error,
+        variant: 'destructive',
+      });
+    };
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      processTranscript(transcript);
+    };
+
+    recognitionRef.current = recognition;
+  }, [isMounted, language, toast, processTranscript]);
+
+  const handleMicClick = () => {
+    if (isLoading) return;
+
+    if (isListening) {
+      recognitionRef.current?.stop();
+    } else {
+      recognitionRef.current?.start();
+    }
+  };
+
+  if (!isMounted) {
+    return null; // Or a loading spinner
+  }
+
+  return (
+    <div className="flex h-screen flex-col bg-background">
+      <header className="flex items-center justify-between border-b p-4 shadow-sm">
+        <div className="flex items-center gap-3">
+          <BrainCircuit className="h-8 w-8 text-primary" />
+          <h1 className="text-2xl font-bold tracking-tight text-foreground font-headline">
+            AgileAssist
+          </h1>
+        </div>
+        <div className="flex items-center gap-4">
+          <LanguageSelector value={language} onValueChange={setLanguage} />
+          <ThemeToggle />
+        </div>
+      </header>
+
+      <main className="flex-1 overflow-hidden">
+        <ChatHistory history={chatHistory} />
+      </main>
+
+      <footer className="relative flex items-center justify-center p-4">
+        <MicButton
+          isListening={isListening}
+          isLoading={isLoading}
+          onClick={handleMicClick}
+          disabled={!isConfigured}
+        />
+      </footer>
+    </div>
+  );
 }
