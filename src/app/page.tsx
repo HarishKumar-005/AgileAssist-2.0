@@ -15,7 +15,7 @@ const initialWelcomeMessage: ChatMessageType = {
   id: 'initial-welcome',
   role: 'assistant',
   text: 'Welcome to AgileAssist! How can I help you today?',
-  audio: '', // This will be populated on the client
+  audio: undefined,
 };
 
 
@@ -46,25 +46,6 @@ export default function Home() {
             description: 'Please configure the GEMINI_API_KEY environment variable.',
             variant: 'destructive',
           });
-        } else {
-           // Generate TTS for the initial message once the component is mounted and configured.
-           if (chatHistory.length === 1 && chatHistory[0].id === 'initial-welcome' && !chatHistory[0].audio) {
-            fetch('/api/gen-ai', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                action: 'textToSpeech',
-                payload: { text: initialWelcomeMessage.text, languageCode: 'en-US' },
-              }),
-            })
-            .then(res => res.json())
-            .then(({ media }) => {
-              setChatHistory(prev => [{ ...prev[0], audio: media }]);
-            })
-            .catch(error => {
-              console.error("Failed to generate welcome audio:", error);
-            });
-          }
         }
       });
   }, [toast]);
