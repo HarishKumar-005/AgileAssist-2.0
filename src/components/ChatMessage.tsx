@@ -1,11 +1,11 @@
 'use client';
 
 import { Sparkles, User } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { ChatMessage as ChatMessageType } from '@/lib/types';
-import { AudioPlayer, WebSpeechPlayer } from './AudioPlayer';
+import { AudioPlayer, WebSpeechPlayer, FallbackPlayer } from './AudioPlayer';
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -14,17 +14,24 @@ interface ChatMessageProps {
 export function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === 'user';
 
-  // For the welcome message, we want to provide playback controls but not autoplay,
-  // as autoplay is handled on the main page.
-  const shouldAutoplay = !message.isWelcome;
+  const renderPlayer = () => {
+    // Don't render a player for user messages
+    if (isUser) return null;
 
-  // Determine which player to use
-  const Player = message.audio ? AudioPlayer : WebSpeechPlayer;
-  const playerProps = message.audio
-    ? { src: message.audio, autoplay: shouldAutoplay }
-    // If there's no audio data, it means we should use the browser's voice.
-    : { text: message.text, lang: message.language || 'en-US', autoplay: shouldAutoplay };
-
+    // For the initial welcome message, use the WebSpeechPlayer.
+    if (message.isWelcome) {
+      return <WebSpeechPlayer text={message.text} lang={message.language || 'en-US'} />;
+    }
+    
+    // If we have a dedicated audio source URL from Google TTS, use the AudioPlayer.
+    if (message.audio) {
+      return <AudioPlayer src={message.audio} />;
+    }
+    
+    // If there's no audio source, it means we used the browser's voice as a fallback.
+    // Provide a button to replay it.
+    return <FallbackPlayer text={message.text} lang={message.language || 'en-US'} />;
+  };
 
   return (
     <div
@@ -49,7 +56,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
           <p className="whitespace-pre-wrap flex-1">{message.text}</p>
           {!isUser && (
             <div className="-mr-2 -my-2">
-              <Player {...playerProps} />
+              {renderPlayer()}
             </div>
           )}
         </CardContent>
@@ -64,3 +71,5 @@ export function ChatMessage({ message }: ChatMessageProps) {
     </div>
   );
 }
+
+    

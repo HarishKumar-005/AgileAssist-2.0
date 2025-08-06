@@ -6,7 +6,6 @@ import { BrainCircuit, LoaderCircle, Sparkles, User } from 'lucide-react';
 
 import type { ChatMessage as ChatMessageType } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { useWebSpeech } from '@/hooks/use-web-speech';
 import { MicButton } from '@/components/MicButton';
 import { ChatHistory } from '@/components/ChatHistory';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -16,7 +15,6 @@ const initialWelcomeMessage: ChatMessageType = {
   id: 'initial-welcome',
   role: 'assistant',
   text: 'Welcome to AgileAssist! How can I help you today?',
-  audio: undefined,
   language: 'en-US',
   isWelcome: true, 
 };
@@ -35,23 +33,28 @@ export default function Home() {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const finalTranscriptRef = useRef<string>('');
-  const { isSupported: isWebSpeechSupported, speak, cancel, areVoicesReady } = useWebSpeech();
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // Effect to handle component mounting
   useEffect(() => {
     setIsMounted(true);
+    // Initialize a single audio element to be reused for playback.
+    audioRef.current = new Audio();
   }, []);
 
-  // Play welcome message only when Web Speech API is ready
+  // Play welcome message audio using Web Speech API when the app loads.
   useEffect(() => {
-    if (isWebSpeechSupported && areVoicesReady && chatHistory[0]?.id === 'initial-welcome') {
-      speak(initialWelcomeMessage.text, initialWelcomeMessage.language || 'en-US');
+    // Only play if this is the first and only message in history.
+    if (isMounted && window.speechSynthesis && chatHistory.length === 1 && chatHistory[0].isWelcome) {
+      const synth = window.speechSynthesis;
+      const utterance = new SpeechSynthesisUtterance(initialWelcomeMessage.text);
+      utterance.lang = initialWelcomeMessage.language || 'en-US';
+      synth.speak(utterance);
     }
-    // Cleanup speech on unmount
-    return () => {
-      cancel();
-    }
-  }, [isWebSpeechSupported, areVoicesReady, speak, cancel, chatHistory]);
+  }, [isMounted, chatHistory]);
 
+
+  // Check for backend configuration on mount
   useEffect(() => {
     fetch('/api/health')
       .then(res => res.json())
@@ -67,13 +70,29 @@ export default function Home() {
       });
   }, [toast]);
 
+  const playAudio = useCallback((src: string) => {
+    if (audioRef.current) {
+        audioRef.current.src = src;
+        audioRef.current.play().catch(e => console.error("Audio playback failed:", e));
+    }
+  }, []);
+
+  const stopAudio = useCallback(() => {
+    window.speechSynthesis.cancel();
+    if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+    }
+  }, []);
+
   const processTranscript = useCallback(async (transcript: string) => {
-    if (!transcript.trim() || !isConfigured) {
+    // Ignore empty or very short transcripts
+    if (!transcript.trim() || transcript.length < 2 || !isConfigured) {
        setIsLoading(false);
        return;
     }
 
-    const newChatHistory = chatHistory[0]?.id === 'initial-welcome' ? [] : chatHistory;
+    const newChatHistory = chatHistory[0]?.isWelcome ? [] : chatHistory;
 
     const userMessage: ChatMessageType = {
       id: Date.now().toString(),
@@ -104,6 +123,7 @@ export default function Home() {
       assistantText = answer;
       responseLanguage = languageCode || 'en-US';
 
+      // --- Text-to-Speech Generation with Fallback ---
       try {
         const ttsRes = await fetch('/api/gen-ai', {
           method: 'POST',
@@ -117,24 +137,21 @@ export default function Home() {
         if (ttsRes.ok) {
           const { media } = await ttsRes.json();
           audioData = media;
+          playAudio(media); // Play audio from Google TTS
         } else {
           // Fallback to Web Speech API
           console.log('Google TTS failed, falling back to Web Speech API.');
-          speak(answer, responseLanguage);
-          const errorData = await ttsRes.json();
-          const errorMessage = errorData.error || 'Unknown TTS error';
-          console.log('Failed to generate audio:', errorMessage);
-          if (typeof errorMessage === 'string' && errorMessage.includes('429')) {
-             toast({
-              title: 'Audio Generation Limit Reached',
-              description: 'Using browser voice as a fallback.',
-              variant: 'destructive',
-            });
-          }
+          const synth = window.speechSynthesis;
+          const utterance = new SpeechSynthesisUtterance(answer);
+          utterance.lang = responseLanguage;
+          synth.speak(utterance);
         }
       } catch (ttsError) {
          console.error('An error occurred during TTS call, falling back to Web Speech API:', ttsError);
-         speak(answer, responseLanguage);
+         const synth = window.speechSynthesis;
+         const utterance = new SpeechSynthesisUtterance(answer);
+         utterance.lang = responseLanguage;
+         synth.speak(utterance);
       }
 
     } catch (error) {
@@ -159,38 +176,28 @@ export default function Home() {
       }
       setIsLoading(false);
     }
-  }, [isConfigured, chatHistory, speak, toast]);
+  }, [isConfigured, chatHistory, toast, playAudio]);
 
+  // Function to stop listening and process the final transcript.
   const stopListeningAndProcess = useCallback(() => {
-    recognitionRef.current?.stop();
-    if (finalTranscriptRef.current) {
-      setIsLoading(true);
-      processTranscript(finalTranscriptRef.current);
-      finalTranscriptRef.current = ''; // Clear the transcript after processing
+    if (recognitionRef.current && isListening) {
+      recognitionRef.current.stop();
+      if (finalTranscriptRef.current) {
+        setIsLoading(true);
+        processTranscript(finalTranscriptRef.current);
+        finalTranscriptRef.current = '';
+      }
     }
-  }, [processTranscript]);
+  }, [isListening, processTranscript]);
 
+  // Effect to initialize Speech Recognition
   useEffect(() => {
-    if (!isMounted || !isWebSpeechSupported) return;
+    if (!isMounted || !('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) return;
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      // We already check for isWebSpeechSupported, but this is a belts-and-suspenders check
-      if (isMounted) { // only show toast if component is mounted
-        toast({
-          title: 'Browser Not Supported',
-          description: 'Speech recognition is not supported in your browser.',
-          variant: 'destructive',
-        });
-      }
-      return;
-    }
-
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-    // We let the AI determine the language, so we can be broad here.
-    // However, some browsers may perform better with a specific language code.
     recognition.lang = 'en-US'; 
 
     recognition.onstart = () => {
@@ -210,31 +217,31 @@ export default function Home() {
        console.error('Speech recognition error:', event.error);
        toast({
         title: 'Speech Recognition Error',
-        description: event.error === 'no-speech' ? 'No speech was detected.' : event.error,
+        description: event.error === 'no-speech' ? 'No speech was detected.' : 'An unknown error occurred.',
         variant: 'destructive',
       });
-      setIsListening(false);
-      setInterimTranscript('');
     };
 
     recognition.onresult = (event) => {
-      // Always clear the timer on a new result
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
       }
       
       let interim = '';
+      let final = '';
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
-          finalTranscriptRef.current += event.results[i][0].transcript.trim() + ' ';
+          final += event.results[i][0].transcript.trim() + ' ';
         } else {
           interim += event.results[i][0].transcript;
         }
       }
       
+      if (final) {
+          finalTranscriptRef.current += final;
+      }
       setInterimTranscript(interim || finalTranscriptRef.current);
 
-      // Start a new timer to stop listening after a pause
       silenceTimerRef.current = setTimeout(
         stopListeningAndProcess,
         SPEECH_RECOGNITION_SILENCE_TIMEOUT
@@ -242,7 +249,7 @@ export default function Home() {
     };
 
     recognitionRef.current = recognition;
-  }, [isMounted, isWebSpeechSupported, toast, processTranscript, stopListeningAndProcess]);
+  }, [isMounted, toast, stopListeningAndProcess]);
 
   const handleMicClick = () => {
     if (isLoading) return;
@@ -253,11 +260,10 @@ export default function Home() {
     if (isListening) {
       stopListeningAndProcess();
     } else {
-      cancel(); // Stop any currently playing audio
+      stopAudio();
       try {
         recognition.start();
       } catch(e) {
-        // This can happen if start() is called while it's already starting.
         console.error("Failed to start recognition:", e);
       }
     }
@@ -308,9 +314,10 @@ export default function Home() {
           isListening={isListening}
           isLoading={isLoading}
           onClick={handleMicClick}
-          disabled={!isConfigured || !isWebSpeechSupported}
+          disabled={!isConfigured}
         />
       </footer>
     </div>
   );
-}
+
+    

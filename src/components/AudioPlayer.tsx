@@ -1,17 +1,49 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Play, Pause } from 'lucide-react';
+import { Play, Pause, Volume2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+
+interface PlayerProps {
+  // A function to handle playing the audio.
+  play: () => void;
+  // A function to handle stopping/pausing the audio.
+  stop: () => void;
+  // A flag indicating if audio is currently playing.
+  isPlaying: boolean;
+}
+
+/**
+ * A generic player control component.
+ */
+function PlayerControl({ play, stop, isPlaying }: PlayerProps) {
+  const togglePlay = () => {
+    if (isPlaying) {
+      stop();
+    } else {
+      play();
+    }
+  };
+
+  return (
+    <Button variant="ghost" size="icon" onClick={togglePlay}>
+      {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+      <span className="sr-only">{isPlaying ? 'Pause' : 'Play'}</span>
+    </Button>
+  );
+}
 
 interface WebSpeechPlayerProps {
   text: string;
   lang: string;
-  autoplay?: boolean;
 }
 
-export function WebSpeechPlayer({ text, lang, autoplay = false }: WebSpeechPlayerProps) {
-  const [isPlaying, setIsPlaying] = useState(autoplay);
+/**
+ * A component to play text using the browser's native Web Speech API.
+ * This is used for the welcome message.
+ */
+export function WebSpeechPlayer({ text, lang }: WebSpeechPlayerProps) {
+  const [isPlaying, setIsPlaying] = useState(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   useEffect(() => {
@@ -19,131 +51,97 @@ export function WebSpeechPlayer({ text, lang, autoplay = false }: WebSpeechPlaye
     if (!synth) return;
 
     const utterance = new SpeechSynthesisUtterance(text);
-    const voices = synth.getVoices();
-    
-    // Find a matching voice for the language
-    const voice = voices.find(v => v.lang === lang) || voices.find(v => v.lang.startsWith(lang.split('-')[0]));
-    if (voice) {
-      utterance.voice = voice;
-    }
     utterance.lang = lang;
 
     utterance.onstart = () => setIsPlaying(true);
     utterance.onend = () => setIsPlaying(false);
     utterance.onerror = () => setIsPlaying(false);
-
+    
     utteranceRef.current = utterance;
-
-    if (autoplay) {
-      synth.speak(utterance);
-    }
 
     return () => {
       synth.cancel();
     };
-  }, [text, lang, autoplay]);
+  }, [text, lang]);
 
-  const togglePlay = () => {
+  const play = () => {
     const synth = window.speechSynthesis;
-    if (!synth || !utteranceRef.current) return;
-
-    if (isPlaying) {
-      synth.cancel();
-    } else {
+    if (synth && utteranceRef.current) {
       synth.speak(utteranceRef.current);
     }
   };
 
-  return (
-    <div>
-      <Button variant="ghost" size="icon" onClick={togglePlay}>
-        {isPlaying ? (
-          <Pause className="h-5 w-5" />
-        ) : (
-          <Play className="h-5 w-5" />
-        )}
-        <span className="sr-only">{isPlaying ? 'Pause' : 'Play'}</span>
-      </Button>
-    </div>
-  );
+  const stop = () => {
+    window.speechSynthesis.cancel();
+  };
+
+  return <PlayerControl play={play} stop={stop} isPlaying={isPlaying} />;
 }
 
 interface AudioPlayerProps {
   src: string;
-  autoplay?: boolean;
 }
 
-export function AudioPlayer({ src, autoplay = false }: AudioPlayerProps) {
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const [isPlaying, setIsPlaying] = useState(autoplay);
+/**
+ * A component to control playback of an audio source.
+ * This is used for AI-generated responses that have an audio source URL.
+ */
+export function AudioPlayer({ src }: AudioPlayerProps) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
+    const audio = new Audio(src);
+    audioRef.current = audio;
 
-    const onCanPlay = () => {
-      if (autoplay) {
-        audio.play().catch(() => setIsPlaying(false));
-      }
-    };
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
     const onEnded = () => setIsPlaying(false);
 
-    // Set src and load
-    audio.src = src;
-    audio.load();
-
-    audio.addEventListener('canplay', onCanPlay);
     audio.addEventListener('play', onPlay);
     audio.addEventListener('pause', onPause);
     audio.addEventListener('ended', onEnded);
-    
-    // Autoplay logic
-    if (autoplay) {
-        // Attempt to play, catching errors for browsers that block it
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-            playPromise.catch(error => {
-                console.error("Autoplay was prevented:", error);
-                setIsPlaying(false);
-            });
-        }
-    }
-
 
     return () => {
-      audio.removeEventListener('canplay', onCanPlay);
+      audio.pause();
       audio.removeEventListener('play', onPlay);
       audio.removeEventListener('pause', onPause);
       audio.removeEventListener('ended', onEnded);
-      audio.pause();
-      audio.src = '';
     };
-  }, [src, autoplay]);
+  }, [src]);
 
-  const togglePlay = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
+  const play = () => audioRef.current?.play().catch(e => console.error("Playback failed", e));
+  const stop = () => audioRef.current?.pause();
 
-    if (isPlaying) {
-      audio.pause();
-    } else {
-      audio.play();
-    }
-  };
-
-  return (
-    <div>
-      <audio ref={audioRef} className="hidden" />
-      <Button variant="ghost" size="icon" onClick={togglePlay}>
-        {isPlaying ? (
-          <Pause className="h-5 w-5" />
-        ) : (
-          <Play className="h-5 w-5" />
-        )}
-        <span className="sr-only">{isPlaying ? 'Pause' : 'Play'}</span>
-      </Button>
-    </div>
-  );
+  return <PlayerControl play={play} stop={stop} isPlaying={isPlaying} />;
 }
+
+/**
+ * A component to indicate that a message can be played, but without an audio source.
+ * This is used for AI-generated responses where TTS failed and we fell back
+ * to the browser's voice, which was played automatically on the main page.
+ * This component just provides a button to re-play it.
+ */
+export function FallbackPlayer({ text, lang }: WebSpeechPlayerProps) {
+    const [isPlaying, setIsPlaying] = useState(false);
+
+    const play = () => {
+        const synth = window.speechSynthesis;
+        if (!synth) return;
+        
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = lang;
+        utterance.onstart = () => setIsPlaying(true);
+        utterance.onend = () => setIsPlaying(false);
+        utterance.onerror = () => setIsPlaying(false);
+
+        synth.speak(utterance);
+    }
+    const stop = () => {
+        window.speechSynthesis.cancel();
+    }
+    
+    return <PlayerControl play={play} stop={stop} isPlaying={isPlaying} />;
+}
+
+    
