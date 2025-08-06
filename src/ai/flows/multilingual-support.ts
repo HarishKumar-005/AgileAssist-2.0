@@ -37,13 +37,15 @@ const prompt = ai.definePrompt({
   output: {schema: MultilingualAssistanceOutputSchema},
   prompt: `You are AgileAssist, a friendly and helpful assistant for college teachers.
 
-  Please answer the following question in the language specified by the language code.
+  Your primary task is to answer the user's question.
 
-  Question: {{{question}}}
+  IMPORTANT: Analyze the user's question to determine the desired language for the response.
+  - If the user explicitly asks for an answer in a specific language (e.g., "in Tamil", "in Hindi"), you MUST provide the answer in that language.
+  - If no specific language is requested, answer in the same language the question was asked.
 
-  Language Code: {{{languageCode}}}
+  User's Question: {{{question}}}
 
-  Answer:`, // Give me only the answer in the language specified by the language code.
+  Answer:`,
   config: {
     safetySettings: [
       {

@@ -7,7 +7,6 @@ import { BrainCircuit, LoaderCircle, Mic, MicOff, Sparkles, User } from 'lucide-
 import type { ChatMessage as ChatMessageType } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useWebSpeech } from '@/hooks/use-web-speech';
-import { LanguageSelector } from '@/components/LanguageSelector';
 import { MicButton } from '@/components/MicButton';
 import { ChatHistory } from '@/components/ChatHistory';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -26,7 +25,7 @@ export default function Home() {
   const [chatHistory, setChatHistory] = useState<ChatMessageType[]>([initialWelcomeMessage]);
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [language, setLanguage] = useState('en-US');
+  const [language, setLanguage] = useState('en-US'); // Default for speech recognition
   const [isMounted, setIsMounted] = useState(false);
   const [isConfigured, setIsConfigured] = useState(true);
   const [interimTranscript, setInterimTranscript] = useState('');
@@ -80,7 +79,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'multilingualAssistance',
-          payload: { question: transcript, languageCode: language },
+          payload: { question: transcript, languageCode: language }, // languageCode is still sent but ignored by the new prompt
         }),
       });
 
@@ -208,6 +207,10 @@ export default function Home() {
     } else {
       // Cancel any browser speech synthesis when starting a new recognition
       cancel();
+      // Use a broad language code for recognition to catch different languages.
+      if (recognitionRef.current) {
+        recognitionRef.current.lang = 'en-US'; // We can keep this simple, as the AI will handle language switching.
+      }
       recognitionRef.current?.start();
     }
   };
@@ -226,7 +229,6 @@ export default function Home() {
           </h1>
         </div>
         <div className="flex items-center gap-4">
-          <LanguageSelector value={language} onValueChange={setLanguage} />
           <ThemeToggle />
         </div>
       </header>
