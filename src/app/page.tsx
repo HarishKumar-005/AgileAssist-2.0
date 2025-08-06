@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { BrainCircuit, LoaderCircle, Mic, MicOff, Sparkles, User } from 'lucide-react';
+import { BrainCircuit, LoaderCircle, Sparkles, User } from 'lucide-react';
 
 import type { ChatMessage as ChatMessageType } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -32,7 +32,7 @@ export default function Home() {
   const [interimTranscript, setInterimTranscript] = useState('');
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const { isSupported: isWebSpeechSupported, speak, cancel } = useWebSpeech();
+  const { isSupported: isWebSpeechSupported, speak, cancel, areVoicesReady } = useWebSpeech();
 
   useEffect(() => {
     setIsMounted(true);
@@ -40,14 +40,14 @@ export default function Home() {
 
   // Play welcome message only when Web Speech API is ready
   useEffect(() => {
-    if (isWebSpeechSupported) {
+    if (isWebSpeechSupported && areVoicesReady && chatHistory[0]?.id === 'initial-welcome') {
       speak(initialWelcomeMessage.text, initialWelcomeMessage.language || 'en-US');
     }
     // Cleanup speech on unmount
     return () => {
       cancel();
     }
-  }, [isWebSpeechSupported, speak, cancel]);
+  }, [isWebSpeechSupported, areVoicesReady, speak, cancel, chatHistory]);
 
   useEffect(() => {
     fetch('/api/health')
@@ -65,9 +65,10 @@ export default function Home() {
   }, [toast]);
 
   const processTranscript = useCallback(async (transcript: string) => {
-    if (!transcript.trim() || !isConfigured) return;
-
-    setIsLoading(true);
+    if (!transcript.trim() || !isConfigured) {
+       setIsLoading(false);
+       return;
+    }
 
     const newChatHistory = chatHistory[0]?.id === 'initial-welcome' ? [] : chatHistory;
 
@@ -158,65 +159,93 @@ export default function Home() {
   }, [isConfigured, chatHistory, speak, toast]);
 
   useEffect(() => {
-    if (!isMounted) return;
+    if (!isMounted || !isWebSpeechSupported) return;
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      toast({
-        title: 'Browser Not Supported',
-        description: 'Speech recognition is not supported in your browser.',
-        variant: 'destructive',
-      });
+      // We already check for isWebSpeechSupported, but this is a belts-and-suspenders check
+      if (isMounted) { // only show toast if component is mounted
+        toast({
+          title: 'Browser Not Supported',
+          description: 'Speech recognition is not supported in your browser.',
+          variant: 'destructive',
+        });
+      }
       return;
     }
 
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
+    // We let the AI determine the language, so we can be broad here.
+    // However, some browsers may perform better with a specific language code.
     recognition.lang = 'en-US'; 
 
-    recognition.onstart = () => setIsListening(true);
+    recognition.onstart = () => {
+      setIsListening(true);
+      setInterimTranscript('');
+    };
+
     recognition.onend = () => {
       setIsListening(false);
       setInterimTranscript('');
+      // If isLoading is true, it means we are processing a transcript, so no need to do anything.
+      // If it's false, it means recognition ended without a final result (e.g., timeout, manual stop).
+      if (!isLoading) {
+        // You might want to handle this case, e.g., show a message 'did not catch that'
+      }
     };
     recognition.onerror = (event) => {
-      toast({
+       console.error('Speech recognition error:', event.error);
+       toast({
         title: 'Speech Recognition Error',
-        description: event.error,
+        description: event.error === 'no-speech' ? 'No speech was detected.' : event.error,
         variant: 'destructive',
       });
+      setIsListening(false);
+      setInterimTranscript('');
     };
+
     recognition.onresult = (event) => {
       let finalTranscript = '';
       let interim = '';
 
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
+          finalTranscript += event.results[i][0].transcript.trim();
         } else {
           interim += event.results[i][0].transcript;
         }
       }
-
+      
       setInterimTranscript(interim);
 
       if (finalTranscript) {
+        recognitionRef.current?.stop(); // Stop listening as soon as we have a final result
+        setIsLoading(true);
         processTranscript(finalTranscript);
       }
     };
 
     recognitionRef.current = recognition;
-  }, [isMounted, toast, processTranscript]);
+  }, [isMounted, isWebSpeechSupported, toast, processTranscript, isLoading]);
 
   const handleMicClick = () => {
     if (isLoading) return;
 
+    const recognition = recognitionRef.current;
+    if (!recognition) return;
+
     if (isListening) {
-      recognitionRef.current?.stop();
+      recognition.stop();
     } else {
-      cancel();
-      recognitionRef.current?.start();
+      cancel(); // Stop any currently playing audio
+      try {
+        recognition.start();
+      } catch(e) {
+        // This can happen if start() is called while it's already starting.
+        console.error("Failed to start recognition:", e);
+      }
     }
   };
 
@@ -246,14 +275,14 @@ export default function Home() {
         <div className="w-full max-w-md lg:max-w-xl h-16">
           {(isListening || isLoading) && (
             <Card className="bg-muted">
-              <CardContent className="p-4 flex items-center justify-center gap-2">
+              <CardContent className="p-4 flex items-center justify-center gap-2 text-center">
                 {isLoading ? (
                   <>
                     <LoaderCircle className="h-5 w-5 animate-spin" />
                     <p className="text-muted-foreground">Thinking...</p>
                   </>
                 ) : (
-                  <p className="text-muted-foreground">
+                  <p className="text-muted-foreground truncate">
                     {interimTranscript || 'Listening...'}
                   </p>
                 )}
@@ -265,7 +294,7 @@ export default function Home() {
           isListening={isListening}
           isLoading={isLoading}
           onClick={handleMicClick}
-          disabled={!isConfigured}
+          disabled={!isConfigured || !isWebSpeechSupported}
         />
       </footer>
     </div>
