@@ -25,7 +25,6 @@ export default function Home() {
   const [chatHistory, setChatHistory] = useState<ChatMessageType[]>([initialWelcomeMessage]);
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [language, setLanguage] = useState('en-US'); // Default for speech recognition
   const [isMounted, setIsMounted] = useState(false);
   const [isConfigured, setIsConfigured] = useState(true);
   const [interimTranscript, setInterimTranscript] = useState('');
@@ -72,6 +71,7 @@ export default function Home() {
 
     let assistantText = '';
     let audioData: string | undefined = undefined;
+    let responseLanguage = 'en-US'; // Default language
 
     try {
       const assistanceRes = await fetch('/api/gen-ai', {
@@ -79,7 +79,7 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'multilingualAssistance',
-          payload: { question: transcript, languageCode: language }, // languageCode is still sent but ignored by the new prompt
+          payload: { question: transcript },
         }),
       });
 
@@ -87,8 +87,9 @@ export default function Home() {
          const errorData = await assistanceRes.json();
          throw new Error(errorData.error || 'Failed to get answer from AI.');
       }
-      const { answer } = await assistanceRes.json();
+      const { answer, languageCode } = await assistanceRes.json();
       assistantText = answer;
+      responseLanguage = languageCode || 'en-US';
 
       try {
         const ttsRes = await fetch('/api/gen-ai', {
@@ -96,7 +97,7 @@ export default function Home() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'textToSpeech',
-            payload: { text: answer, languageCode: language },
+            payload: { text: answer, languageCode: responseLanguage },
           }),
         });
 
@@ -106,7 +107,7 @@ export default function Home() {
         } else {
           // Fallback to Web Speech API
           console.log('Google TTS failed, falling back to Web Speech API.');
-          speak(answer, language);
+          speak(answer, responseLanguage);
           const errorData = await ttsRes.json();
           const errorMessage = errorData.error || 'Unknown TTS error';
           console.error('Failed to generate audio:', errorMessage);
@@ -120,7 +121,7 @@ export default function Home() {
         }
       } catch (ttsError) {
          console.error('An error occurred during TTS call, falling back to Web Speech API:', ttsError);
-         speak(answer, language);
+         speak(answer, responseLanguage);
       }
 
     } catch (error) {
@@ -140,12 +141,13 @@ export default function Home() {
           role: 'assistant',
           text: assistantText,
           audio: audioData,
+          language: responseLanguage,
         };
         setChatHistory(prev => [...prev, assistantMessage]);
       }
       setIsLoading(false);
     }
-  }, [language, toast, isConfigured, chatHistory, speak]);
+  }, [isConfigured, chatHistory, speak, toast]);
 
   useEffect(() => {
     if (!isMounted) return;
@@ -163,7 +165,7 @@ export default function Home() {
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = language;
+    recognition.lang = 'en-US'; // We can keep this simple, as the AI will handle language switching.
 
     recognition.onstart = () => setIsListening(true);
     recognition.onend = () => {
@@ -197,7 +199,7 @@ export default function Home() {
     };
 
     recognitionRef.current = recognition;
-  }, [isMounted, language, toast, processTranscript]);
+  }, [isMounted, toast, processTranscript]);
 
   const handleMicClick = () => {
     if (isLoading) return;
@@ -207,10 +209,6 @@ export default function Home() {
     } else {
       // Cancel any browser speech synthesis when starting a new recognition
       cancel();
-      // Use a broad language code for recognition to catch different languages.
-      if (recognitionRef.current) {
-        recognitionRef.current.lang = 'en-US'; // We can keep this simple, as the AI will handle language switching.
-      }
       recognitionRef.current?.start();
     }
   };

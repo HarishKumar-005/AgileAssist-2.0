@@ -12,16 +12,12 @@ import {z} from 'genkit';
 
 const MultilingualAssistanceInputSchema = z.object({
   question: z.string().describe('The question to be answered.'),
-  languageCode: z
-    .string()
-    .describe(
-      'The language code for the desired response language (e.g., hi-IN, ta-IN, te-IN).'
-    ),
 });
 export type MultilingualAssistanceInput = z.infer<typeof MultilingualAssistanceInputSchema>;
 
 const MultilingualAssistanceOutputSchema = z.object({
   answer: z.string().describe('The answer to the question in the specified language.'),
+  languageCode: z.string().describe("The BCP-47 language code of the answer (e.g., 'en-US', 'ta-IN', 'hi-IN')."),
 });
 export type MultilingualAssistanceOutput = z.infer<typeof MultilingualAssistanceOutputSchema>;
 
@@ -43,9 +39,10 @@ const prompt = ai.definePrompt({
   - If the user explicitly asks for an answer in a specific language (e.g., "in Tamil", "in Hindi"), you MUST provide the answer in that language.
   - If no specific language is requested, answer in the same language the question was asked.
 
-  User's Question: {{{question}}}
+  After generating the answer, you MUST identify the language of your response and set the 'languageCode' field in the output to the correct BCP-47 code (e.g., 'en-US' for English, 'hi-IN' for Hindi, 'ta-IN' for Tamil).
 
-  Answer:`,
+  User's Question: {{{question}}}
+  `,
   config: {
     safetySettings: [
       {
