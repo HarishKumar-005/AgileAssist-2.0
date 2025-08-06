@@ -99,7 +99,15 @@ export default function Home() {
           audioData = media;
         } else {
           const errorData = await ttsRes.json();
-          console.error('Failed to generate audio:', errorData.error || 'Unknown TTS error');
+          const errorMessage = errorData.error || 'Unknown TTS error';
+          console.error('Failed to generate audio:', errorMessage);
+          if (typeof errorMessage === 'string' && errorMessage.includes('429')) {
+             toast({
+              title: 'Audio Generation Limit Reached',
+              description: 'You have exceeded the daily limit for text-to-speech. Text responses will continue to work.',
+              variant: 'destructive',
+            });
+          }
         }
       } catch (ttsError) {
          console.error('An error occurred during TTS call:', ttsError);
