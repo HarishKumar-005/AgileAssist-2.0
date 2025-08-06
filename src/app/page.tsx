@@ -185,17 +185,24 @@ export default function Home() {
       </main>
 
       <footer className="relative flex flex-col items-center justify-center gap-2 p-4">
-        {isListening && (
-          <div className="w-full max-w-md lg:max-w-xl">
+        <div className="w-full max-w-md lg:max-w-xl h-16">
+          {(isListening || isLoading) && (
             <Card className="bg-muted">
-              <CardContent className="p-4">
-                <p className="text-muted-foreground">
-                  {interimTranscript || 'Listening...'}
-                </p>
+              <CardContent className="p-4 flex items-center justify-center gap-2">
+                {isLoading ? (
+                  <>
+                    <LoaderCircle className="h-5 w-5 animate-spin" />
+                    <p className="text-muted-foreground">Thinking...</p>
+                  </>
+                ) : (
+                  <p className="text-muted-foreground">
+                    {interimTranscript || 'Listening...'}
+                  </p>
+                )}
               </CardContent>
             </Card>
-          </div>
-        )}
+          )}
+        </div>
         <MicButton
           isListening={isListening}
           isLoading={isLoading}
