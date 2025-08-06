@@ -13,7 +13,7 @@
   "backgroundColor": "#F0F0F0",
   "enableNotifications": true,
   "startUrl": "/",
-  "iconUrl": "https://agile-assist-2-0.vercel.app/icon-512x512.png",
+  "iconUrl": "https://agile-assist-2-0.vercel.app/public/icon-512x512.png",
   "splashScreenFadeOutDuration": 300,
   "signingKey": {
     "path": "C:\\Users\\Hp\\Documents\\GitHub\\AgileAssist-2.0\\android.keystore",
@@ -26,9 +26,6 @@
   "webManifestUrl": "https://agile-assist-2-0.vercel.app/manifest.json",
   "fallbackType": "customtabs",
   "features": {
-    "playBilling": {
-      "enabled": true
-    },
     "locationDelegation": {
       "enabled": true
     }
