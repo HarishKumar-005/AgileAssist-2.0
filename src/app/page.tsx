@@ -119,7 +119,7 @@ export default function Home() {
           speak(answer, responseLanguage);
           const errorData = await ttsRes.json();
           const errorMessage = errorData.error || 'Unknown TTS error';
-          console.error('Failed to generate audio:', errorMessage);
+          console.log('Failed to generate audio:', errorMessage);
           if (typeof errorMessage === 'string' && errorMessage.includes('429')) {
              toast({
               title: 'Audio Generation Limit Reached',

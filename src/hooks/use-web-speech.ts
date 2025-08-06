@@ -13,7 +13,7 @@ export function useWebSpeech() {
 
   const speak = useCallback((text: string, lang: string) => {
     if (!isSupported) {
-      console.error('Web Speech API is not supported in this browser.');
+      console.log('Web Speech API is not supported in this browser.');
       return;
     }
     
