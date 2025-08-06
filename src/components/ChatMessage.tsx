@@ -33,10 +33,10 @@ export function ChatMessage({ message }: ChatMessageProps) {
           'bg-card': !isUser,
         })}
       >
-        <CardContent className="p-4">
-          <p className="whitespace-pre-wrap">{message.text}</p>
+        <CardContent className="p-4 flex items-start gap-2">
+          <p className="whitespace-pre-wrap flex-1">{message.text}</p>
           {!isUser && message.audio && (
-            <div className="mt-2 -ml-2">
+            <div className="-mr-2 -my-2">
               <AudioPlayer src={message.audio} autoplay />
             </div>
           )}

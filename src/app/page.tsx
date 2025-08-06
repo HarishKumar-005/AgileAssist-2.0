@@ -5,6 +5,7 @@ import { BrainCircuit, LoaderCircle, Mic, MicOff, Sparkles, User } from 'lucide-
 
 import type { ChatMessage as ChatMessageType } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
+import { useWebSpeech } from '@/hooks/use-web-speech';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { MicButton } from '@/components/MicButton';
 import { ChatHistory } from '@/components/ChatHistory';
@@ -30,9 +31,14 @@ export default function Home() {
   const [interimTranscript, setInterimTranscript] = useState('');
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const { speak, cancel } = useWebSpeech();
 
   useEffect(() => {
     setIsMounted(true);
+    // Cleanup speech on unmount
+    return () => {
+      cancel();
+    }
   }, []);
 
   useEffect(() => {
@@ -98,19 +104,23 @@ export default function Home() {
           const { media } = await ttsRes.json();
           audioData = media;
         } else {
+          // Fallback to Web Speech API
+          console.error('Google TTS failed, falling back to Web Speech API.');
+          speak(answer, language);
           const errorData = await ttsRes.json();
           const errorMessage = errorData.error || 'Unknown TTS error';
           console.error('Failed to generate audio:', errorMessage);
           if (typeof errorMessage === 'string' && errorMessage.includes('429')) {
              toast({
               title: 'Audio Generation Limit Reached',
-              description: 'You have exceeded the daily limit for text-to-speech. Text responses will continue to work.',
+              description: 'Using browser voice as a fallback.',
               variant: 'destructive',
             });
           }
         }
       } catch (ttsError) {
-         console.error('An error occurred during TTS call:', ttsError);
+         console.error('An error occurred during TTS call, falling back to Web Speech API:', ttsError);
+         speak(answer, language);
       }
 
     } catch (error) {
@@ -135,7 +145,7 @@ export default function Home() {
       }
       setIsLoading(false);
     }
-  }, [language, toast, isConfigured, chatHistory]);
+  }, [language, toast, isConfigured, chatHistory, speak]);
 
   useEffect(() => {
     if (!isMounted) return;
@@ -195,6 +205,8 @@ export default function Home() {
     if (isListening) {
       recognitionRef.current?.stop();
     } else {
+      // Cancel any browser speech synthesis when starting a new recognition
+      cancel();
       recognitionRef.current?.start();
     }
   };
