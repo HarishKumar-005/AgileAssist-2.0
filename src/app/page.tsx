@@ -74,7 +74,6 @@ export default function Home() {
 
     setIsLoading(true);
 
-    // Clear initial message if it's the only one
     const newChatHistory = chatHistory[0]?.id === 'initial-welcome' ? [] : chatHistory;
 
     const userMessage: ChatMessageType = {
@@ -83,6 +82,9 @@ export default function Home() {
       text: transcript,
     };
     setChatHistory([...newChatHistory, userMessage]);
+
+    let assistantText = '';
+    let audioData: string | undefined = undefined;
 
     try {
       const assistanceRes = await fetch('/api/gen-ai', {
@@ -94,28 +96,34 @@ export default function Home() {
         }),
       });
 
-      if (!assistanceRes.ok) throw new Error('Failed to get answer from AI.');
+      if (!assistanceRes.ok) {
+         const errorData = await assistanceRes.json();
+         throw new Error(errorData.error || 'Failed to get answer from AI.');
+      }
       const { answer } = await assistanceRes.json();
+      assistantText = answer;
 
-      const ttsRes = await fetch('/api/gen-ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'textToSpeech',
-          payload: { text: answer, languageCode: language },
-        }),
-      });
+      try {
+        const ttsRes = await fetch('/api/gen-ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'textToSpeech',
+            payload: { text: answer, languageCode: language },
+          }),
+        });
 
-      if (!ttsRes.ok) throw new Error('Failed to generate audio.');
-      const { media } = await ttsRes.json();
+        if (ttsRes.ok) {
+          const { media } = await ttsRes.json();
+          audioData = media;
+        } else {
+          const errorData = await ttsRes.json();
+          console.error('Failed to generate audio:', errorData.error || 'Unknown TTS error');
+        }
+      } catch (ttsError) {
+         console.error('An error occurred during TTS call:', ttsError);
+      }
 
-      const assistantMessage: ChatMessageType = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        text: answer,
-        audio: media,
-      };
-      setChatHistory(prev => [...prev, assistantMessage]);
     } catch (error) {
       console.error(error);
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
@@ -124,7 +132,18 @@ export default function Home() {
         description: errorMessage,
         variant: 'destructive',
       });
+      // Use a generic error message if the AI fails completely
+      assistantText = "I'm sorry, but I encountered an error and can't respond right now.";
     } finally {
+      if (assistantText) {
+        const assistantMessage: ChatMessageType = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          text: assistantText,
+          audio: audioData,
+        };
+        setChatHistory(prev => [...prev, assistantMessage]);
+      }
       setIsLoading(false);
     }
   }, [language, toast, isConfigured, chatHistory]);
