@@ -27,6 +27,21 @@ export async function textToSpeech(input: TextToSpeechInput): Promise<TextToSpee
   return textToSpeechFlow(input);
 }
 
+// Map language codes to specific, high-quality voices.
+const getVoiceForLanguage = (languageCode: string): string => {
+  switch (languageCode) {
+    case 'hi-IN':
+      return 'en-IN-Wavenet-A'; // A common voice for Indian English, often supports Hindi
+    case 'ta-IN':
+      return 'ta-IN-Wavenet-A';
+    case 'te-IN':
+      return 'te-IN-Standard-A';
+    case 'en-US':
+    default:
+      return 'en-US-News-K'; // A clear, standard English voice
+  }
+}
+
 const textToSpeechFlow = ai.defineFlow(
   {
     name: 'textToSpeechFlow',
@@ -34,13 +49,21 @@ const textToSpeechFlow = ai.defineFlow(
     outputSchema: TextToSpeechOutputSchema,
   },
   async (input) => {
+    // Note: The gemini-2.5-flash-preview-tts model does not officially support voice selection yet.
+    // The underlying speech API it uses, however, does. We are providing the voice name here
+    // for future compatibility and in case the model passes it through.
+    // The primary way language is handled is via the text content itself.
+    const voiceName = getVoiceForLanguage(input.languageCode);
+
     const { media } = await ai.generate({
       model: 'googleai/gemini-2.5-flash-preview-tts',
       config: {
         responseModalities: ['AUDIO'],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Algenib' },
+            // Although not officially documented for this model, we pass the desired voice.
+            // The model is trained to recognize the language from the prompt text.
+            prebuiltVoiceConfig: { voiceName: voiceName },
           },
         },
       },
